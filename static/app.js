@@ -37,6 +37,13 @@ let devices = [
 const selectedDeviceIds = new Set();
 let currentPage = 1;
 const PAGE_SIZE = 50;
+const DEVICE_LIMIT = 25;
+const DEVICE_LIMIT_WARNING_RATIO = 0.8;
+const LIMIT_RESET_MS = 60 * 60 * 1000;
+const LIMIT_RESET_KEY = 'netops_device_limit_reset_at';
+let deviceLimitWarningShown = false;
+let deviceLimitReachedShown = false;
+let isAutoResetting = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadDevices();
@@ -126,6 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDevices();
         updateStats();
     }, 30000);
+
+    setInterval(() => {
+        checkDeviceLimit({ total: devices.length, limit: DEVICE_LIMIT, warningRatio: DEVICE_LIMIT_WARNING_RATIO });
+    }, 1000);
 });
 
 function getFilteredDevices() {
@@ -286,6 +297,8 @@ function updateStats() {
     document.getElementById('online-devices').textContent = online;
     document.getElementById('offline-devices').textContent = offline;
     document.getElementById('active-commands').textContent = '0';
+
+    checkDeviceLimit({ total, limit: DEVICE_LIMIT, warningRatio: DEVICE_LIMIT_WARNING_RATIO });
 }
 
 function toLocalInputValue(date) {
@@ -320,6 +333,12 @@ function hideAddDeviceModal() {
 function handleAddDevice(e) {
     e.preventDefault();
 
+    const limitState = checkDeviceLimit({ total: devices.length, limit: DEVICE_LIMIT });
+    if (limitState.reached) {
+        showNotification(`⚠️ Device limit reached (${limitState.limit}). Delete old devices before adding new ones.`, 'warning');
+        return;
+    }
+
     const nowIso = new Date().toISOString();
     const parseDateTimeLocal = (value) => (value ? new Date(value).toISOString() : null);
 
@@ -345,6 +364,178 @@ function handleAddDevice(e) {
     updateStats();
     hideAddDeviceModal();
     showNotification('✅ Device added successfully!');
+}
+
+// Show limit warning if needed
+function checkDeviceLimit(meta = {}) {
+    const total = Number.isFinite(meta.total) ? meta.total : devices.length;
+    const limit = Number.isFinite(meta.limit) ? meta.limit : DEVICE_LIMIT;
+    const warningRatio = Number.isFinite(meta.warningRatio) ? meta.warningRatio : DEVICE_LIMIT_WARNING_RATIO;
+    const warningAt = Math.max(1, Math.floor(limit * warningRatio));
+    const reached = total >= limit;
+
+    if (reached) {
+        ensureLimitResetTimer();
+    } else {
+        clearLimitResetTimer();
+    }
+
+    const resetAt = getLimitResetAt();
+    const remainingMs = resetAt ? Math.max(0, resetAt - Date.now()) : 0;
+
+    if (reached && remainingMs === 0 && resetAt && !isAutoResetting) {
+        runDeviceLimitReset();
+        return { total, limit, warningAt, reached: false, resetAt: null };
+    }
+
+    updateLimitUI({ total, limit, warningAt, reached, remainingMs, resetAt });
+
+    if (reached) {
+        if (!deviceLimitReachedShown) {
+            showNotification(`⚠️ Device limit reached (${total}/${limit}). Auto reset in 1 hour.`, 'warning');
+            deviceLimitReachedShown = true;
+        }
+        return { total, limit, warningAt, reached: true, resetAt };
+    }
+
+    deviceLimitReachedShown = false;
+
+    if (total >= warningAt) {
+        if (!deviceLimitWarningShown) {
+            showNotification(`⚠️ Near device limit (${total}/${limit}).`, 'warning');
+            deviceLimitWarningShown = true;
+        }
+    } else {
+        deviceLimitWarningShown = false;
+    }
+
+    return { total, limit, warningAt, reached: false, resetAt: null };
+}
+
+function updateLimitUI(state) {
+    const addBtn = document.getElementById('open-add-device-btn');
+    const banner = document.getElementById('device-limit-banner');
+    const title = document.getElementById('device-limit-title');
+    const message = document.getElementById('device-limit-message');
+    const countdown = document.getElementById('device-limit-countdown');
+
+    if (addBtn) {
+        addBtn.disabled = state.reached;
+        addBtn.classList.toggle('opacity-50', state.reached);
+        addBtn.classList.toggle('cursor-not-allowed', state.reached);
+        addBtn.title = state.reached
+            ? `Limit reached (${state.total}/${state.limit})`
+            : `Add device (${state.total}/${state.limit})`;
+    }
+
+    if (!banner || !title || !message || !countdown) return;
+
+    if (state.reached) {
+        banner.classList.remove('hidden', 'border-amber-200', 'bg-amber-50');
+        banner.classList.add('border-red-200', 'bg-red-50');
+        title.className = 'text-sm font-semibold text-red-800';
+        message.className = 'text-sm text-red-700';
+        countdown.className = 'rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-semibold text-red-800';
+        title.textContent = 'Device limit reached';
+        message.textContent = `Maximum ${state.limit} devices. System will auto-reset and restore 3 dummy devices.`;
+        countdown.textContent = formatCountdown(state.remainingMs);
+        return;
+    }
+
+    if (state.total >= state.warningAt) {
+        banner.classList.remove('hidden', 'border-red-200', 'bg-red-50');
+        banner.classList.add('border-amber-200', 'bg-amber-50');
+        title.className = 'text-sm font-semibold text-amber-800';
+        message.className = 'text-sm text-amber-700';
+        countdown.className = 'rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800';
+        title.textContent = 'Approaching device limit';
+        message.textContent = `You are using ${state.total} of ${state.limit} devices.`;
+        countdown.textContent = `${state.limit - state.total} slots left`;
+        return;
+    }
+
+    banner.classList.add('hidden');
+}
+
+function ensureLimitResetTimer() {
+    if (getLimitResetAt()) return;
+    setLimitResetAt(Date.now() + LIMIT_RESET_MS);
+}
+
+function clearLimitResetTimer() {
+    localStorage.removeItem(LIMIT_RESET_KEY);
+}
+
+function getLimitResetAt() {
+    const raw = localStorage.getItem(LIMIT_RESET_KEY);
+    if (!raw) return null;
+    const timestamp = Number(raw);
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function setLimitResetAt(timestamp) {
+    localStorage.setItem(LIMIT_RESET_KEY, String(timestamp));
+}
+
+function runDeviceLimitReset() {
+    isAutoResetting = true;
+    clearLimitResetTimer();
+    selectedDeviceIds.clear();
+    currentPage = 1;
+    deviceLimitReachedShown = false;
+    deviceLimitWarningShown = false;
+    devices = buildResetDummyDevices();
+    loadDevices();
+    updateStats();
+    showNotification('✅ Protection reset complete. 3 dummy devices restored.', 'success');
+    isAutoResetting = false;
+}
+
+function buildResetDummyDevices() {
+    const now = Date.now();
+    return [
+        {
+            id: `reset-${now}-1`,
+            name: 'Router-RESET-01',
+            ip_address: '10.10.10.11',
+            location: 'Jakarta',
+            status: 'online',
+            last_seen: new Date(now).toISOString(),
+            last_downtime: null,
+            created_at: new Date(now - 86400000).toISOString(),
+            updated_at: new Date(now).toISOString()
+        },
+        {
+            id: `reset-${now}-2`,
+            name: 'Switch-RESET-01',
+            ip_address: '10.10.10.12',
+            location: 'Bandung',
+            status: 'online',
+            last_seen: new Date(now).toISOString(),
+            last_downtime: null,
+            created_at: new Date(now - 86400000 * 2).toISOString(),
+            updated_at: new Date(now).toISOString()
+        },
+        {
+            id: `reset-${now}-3`,
+            name: 'Firewall-RESET-01',
+            ip_address: '10.10.10.13',
+            location: 'Surabaya',
+            status: 'offline',
+            last_seen: new Date(now - 3600000).toISOString(),
+            last_downtime: new Date(now - 3600000).toISOString(),
+            created_at: new Date(now - 86400000 * 3).toISOString(),
+            updated_at: new Date(now - 3600000).toISOString()
+        }
+    ];
+}
+
+function formatCountdown(ms) {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+    const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
 }
 
 function closeSelectionMenu() {
