@@ -1,8 +1,12 @@
 [build]
 builder = "NIXPACKS"
+buildCommand = "go build -o bin/api src/main.go"
 
 [deploy]
-startCommand = "go run src/main.go"
+startCommand = "./bin/api"
 healthcheckPath = "/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
+
+[env]
+PORT = "8080"
