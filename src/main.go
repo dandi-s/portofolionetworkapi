@@ -15,7 +15,18 @@ func main() {
 	}
 
 	router := gin.Default()
-
+// Root welcome page
+router.GET("/", func(c *gin.Context) {
+    c.JSON(200, gin.H{
+        "name": "Network Operations Integration API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": gin.H{
+            "health": "/health",
+            "devices": "/api/v1/devices",
+        },
+    })
+})
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"status": "healthy",
