@@ -37,10 +37,43 @@ func ListDevices(c *gin.Context) {
 		devices = append(devices, device)
 	}
 
-	c.JSON(200, gin.H{"success": true, "data": devices, "total": len(devices)})
+	// Get device count and limit info
+	limitReached, count, _ := database.IsDeviceLimitReached()
+	timeUntilReset := database.GetTimeUntilReset()
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"data":    devices,
+		"total":   len(devices),
+		"meta": gin.H{
+			"limit_reached":    limitReached,
+			"max_devices":      database.MaxDevices,
+			"current_count":    count,
+			"reset_in_minutes": int(timeUntilReset.Minutes()),
+		},
+	})
 }
 
 func CreateDevice(c *gin.Context) {
+	// Check device limit
+	limitReached, count, err := database.IsDeviceLimitReached()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to check device limit"})
+		return
+	}
+	
+	if limitReached {
+		resetIn := database.GetTimeUntilReset()
+		c.JSON(400, gin.H{
+			"error":   "Demo device limit reached",
+			"message": "Maximum 25 devices allowed. Database will auto-reset in " + formatDuration(resetIn),
+			"limit":   database.MaxDevices,
+			"current": count,
+			"reset_in_minutes": int(resetIn.Minutes()),
+		})
+		return
+	}
+
 	var req models.CreateDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "Invalid request"})
@@ -48,7 +81,7 @@ func CreateDevice(c *gin.Context) {
 	}
 
 	var deviceID string
-	err := database.DB.QueryRow(`
+	err = database.DB.QueryRow(`
 		INSERT INTO devices (name, ip_address, location, status, last_seen)
 		VALUES ($1, $2, $3, 'online', NOW()) RETURNING id
 	`, req.Name, req.IPAddress, req.Location).Scan(&deviceID)
@@ -58,7 +91,11 @@ func CreateDevice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(201, gin.H{"success": true, "message": "Device created", "id": deviceID})
+	c.JSON(201, gin.H{
+		"success": true,
+		"message": "Device created",
+		"id":      deviceID,
+	})
 }
 
 func UpdateDevice(c *gin.Context) {
@@ -95,4 +132,15 @@ func DeleteDevice(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"success": true, "message": "Device deleted"})
+}
+
+func formatDuration(d time.Duration) string {
+	minutes := int(d.Minutes())
+	if minutes < 1 {
+		return "less than 1 minute"
+	}
+	if minutes == 1 {
+		return "1 minute"
+	}
+	return string(rune(minutes)) + " minutes"
 }
