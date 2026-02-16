@@ -250,8 +250,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Dandi Sugiarto**
 
 - 💼 Network Engineer & Backend Developer
-- 📧 Email: dandidx@gmail.com
-- 🔗 LinkedIn: [linkedin.com/in/dandi-sugiarto](https://linkedin.com/in/dandi-sugiarto)
+- 🔗 LinkedIn: [linkedin.com/in/dandi-sugiarto](https://www.linkedin.com/in/dandi-s-66b375116/)
 - 💻 GitHub: [@dandidx](https://github.com/dandidx)
 - 🌐 Portfolio: [dandidx.com](https://dandidx.com)
 
