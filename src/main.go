@@ -9,6 +9,7 @@ import (
 	
 	"portofolionetworkapi/internal/database"
 	"portofolionetworkapi/internal/handlers"
+	"portofolionetworkapi/internal/middleware"
 )
 
 func main() {
@@ -42,18 +43,21 @@ func main() {
 		c.Next()
 	})
 
+	// Rate limiting - 100 requests per minute per IP
+	router.Use(middleware.RateLimit(100))
+
 	// Static files
 	router.Static("/static", "./static")
 	router.GET("/", func(c *gin.Context) {
 		c.File("./static/index.html")
 	})
 
-	// Health
+	// Health (no rate limit)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "healthy", "service": "netops-integration-api"})
 	})
 
-	// API routes
+	// API routes with rate limiting
 	v1 := router.Group("/api/v1")
 	{
 		v1.POST("/agent/heartbeat", func(c *gin.Context) {
@@ -78,5 +82,6 @@ func main() {
 	}
 
 	log.Printf("🚀 Server starting on port %s", port)
+	log.Printf("🛡️ Rate limit: 100 requests/min per IP")
 	router.Run(":" + port)
 }
