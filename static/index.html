@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Network Operations Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
     <style>
         :root {
@@ -94,7 +95,7 @@
                         <p class="text-xs uppercase tracking-wider text-[var(--muted)]">Total Devices</p>
                         <p id="total-devices" class="mt-2 text-3xl font-semibold">0</p>
                     </div>
-                    <div class="rounded-xl bg-[var(--brand-soft)] p-3 text-xl">📡</div>
+                    <div class="rounded-xl bg-[var(--brand-soft)] p-3 text-xl">🖥️</div>
                 </div>
                 <div class="mt-4 h-1.5 rounded-full bg-[var(--brand-soft)]"></div>
             </article>
@@ -135,7 +136,20 @@
 
         <section class="card p-4 fade-in">
             <div class="flex flex-wrap items-center gap-2">
-                <button onclick="showAddDeviceModal()" class="btn-action btn-primary">Add Device</button>
+                <button id="open-add-device-btn" onclick="showAddDeviceModal()" class="btn-action btn-primary">Add Device</button>
+                <div id="selection-actions" class="relative hidden">
+                    <button id="selection-menu-toggle" type="button" class="btn-action px-3" title="Selected actions" aria-label="Selected actions">⋯</button>
+                    <div id="selection-menu" class="hidden absolute left-0 top-12 w-36 rounded-xl border border-[var(--border)] bg-white p-1 shadow-sm">
+                        <button id="open-bulk-edit-btn" onclick="showEditDeviceModal()" class="flex h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-[var(--text)] hover:bg-[var(--surface-soft)]" title="Edit selected" aria-label="Edit selected">
+                            <i class="far fa-edit" aria-hidden="true"></i>
+                            <span>Edit</span>
+                        </button>
+                        <button id="bulk-delete-btn" onclick="deleteSelectedDevices()" class="mt-1 flex h-10 w-full items-center gap-2 rounded-lg px-3 text-sm text-red-600 hover:bg-red-50" title="Delete selected" aria-label="Delete selected">
+                            <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                            <span>Delete</span>
+                        </button>
+                    </div>
+                </div>
                 <button onclick="bulkAction('change_dns')" class="btn-action">Change DNS</button>
                 <button onclick="bulkAction('backup')" class="btn-action">Backup Config</button>
                 <button onclick="refreshDevices()" class="btn-action">Refresh</button>
@@ -154,6 +168,9 @@
                         <option value="online">Online</option>
                         <option value="offline">Offline</option>
                     </select>
+                    <div class="rounded-lg border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-2.5 text-sm text-[var(--muted)]">
+                        Selected: <span id="selected-count" class="font-semibold text-[var(--text)]">0</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -167,18 +184,22 @@
                 <table class="w-full">
                     <thead class="bg-[var(--surface-soft)]">
                         <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+                                <input id="select-all-devices" type="checkbox" class="h-4 w-4 rounded border-gray-300">
+                            </th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Device</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">IP Address</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Location</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Last Seen</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Last Downtime</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Last Modified</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Created</th>
                         </tr>
                     </thead>
                     <tbody id="devices-table" class="divide-y divide-[var(--border)]">
                         <tr>
-                            <td colspan="7" class="px-6 py-12 text-center">
+                            <td colspan="9" class="px-6 py-12 text-center">
                                 <div class="text-4xl mb-2">📡</div>
                                 <p class="font-medium text-[var(--text)]">No devices found</p>
                                 <p class="text-sm text-[var(--muted)] mt-1">Click "Add Device" to get started</p>
@@ -186,6 +207,14 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] px-5 py-3">
+                <p id="pagination-info" class="text-sm text-[var(--muted)]">Showing 0 to 0 of 0 devices</p>
+                <div class="flex items-center gap-2">
+                    <button id="prev-page-btn" onclick="goToPreviousPage()" class="btn-action px-3 py-2 text-sm">Previous</button>
+                    <span id="page-indicator" class="text-sm text-[var(--muted)]">Page 1 of 1</span>
+                    <button id="next-page-btn" onclick="goToNextPage()" class="btn-action px-3 py-2 text-sm">Next</button>
+                </div>
             </div>
         </section>
 
@@ -221,17 +250,38 @@
         <div class="card w-full max-w-md p-6 fade-in">
             <h3 class="text-xl font-semibold">Add New Device</h3>
             <form id="add-device-form" class="mt-5 space-y-4">
-                <div>
-                    <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Device Name</label>
-                    <input type="text" id="device-name" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" placeholder="Router-BDG-01" required>
-                </div>
-                <div>
-                    <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">IP Address</label>
-                    <input type="text" id="device-ip" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" placeholder="192.168.100.1" required>
-                </div>
-                <div>
-                    <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Location</label>
-                    <input type="text" id="device-location" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" placeholder="Jakarta" required>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Device Name</label>
+                        <input type="text" id="device-name" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" placeholder="Router-BDG-01" required>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">IP Address</label>
+                        <input type="text" id="device-ip" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" placeholder="192.168.100.1" required>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Location</label>
+                        <input type="text" id="device-location" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" placeholder="Jakarta" required>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Status</label>
+                        <select id="device-status" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                            <option value="online" selected>Online</option>
+                            <option value="offline">Offline</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Last Seen</label>
+                        <input type="datetime-local" id="device-last-seen" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Last Modified</label>
+                        <input type="datetime-local" id="device-updated-at" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Created</label>
+                        <input type="datetime-local" id="device-created-at" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
                 </div>
                 <div class="flex gap-3 pt-2">
                     <button type="submit" class="flex-1 rounded-lg bg-[var(--brand)] py-2.5 text-sm font-medium text-white hover:opacity-95 transition">Add Device</button>
@@ -241,6 +291,81 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <div id="edit-device-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div class="card w-full max-w-2xl p-6 fade-in">
+            <h3 class="text-xl font-semibold">Edit Selected Device</h3>
+            <p class="mt-1 text-sm text-[var(--muted)]">Update device details. Select exactly one device to edit.</p>
+            <form id="edit-device-form" class="mt-5 space-y-4">
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="sm:col-span-2">
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Device Name</label>
+                        <input type="text" id="edit-device-name" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" required>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">IP Address</label>
+                        <input type="text" id="edit-device-ip" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" required>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Location</label>
+                        <input type="text" id="edit-device-location" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" required>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Status</label>
+                        <select id="edit-device-status" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                            <option value="online">Online</option>
+                            <option value="offline">Offline</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Last Seen</label>
+                        <input type="datetime-local" id="edit-device-last-seen" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Last Downtime</label>
+                        <input type="datetime-local" id="edit-device-last-downtime" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Last Modified</label>
+                        <input type="datetime-local" id="edit-device-updated-at" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Created</label>
+                        <input type="datetime-local" id="edit-device-created-at" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none ring-0 focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="flex-1 rounded-lg bg-[var(--brand)] py-2.5 text-sm font-medium text-white hover:opacity-95 transition">Save Changes</button>
+                    <button type="button" onclick="hideEditDeviceModal()" class="flex-1 rounded-lg border border-[var(--border)] bg-white py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] transition">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="bulk-edit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+        <div class="card w-full max-w-md p-6 fade-in">
+            <h3 class="text-xl font-semibold">Edit Selected Devices</h3>
+            <p class="mt-1 text-sm text-[var(--muted)]">Bulk update for multiple selected devices.</p>
+            <form id="bulk-edit-form" class="mt-5 space-y-4">
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Status</label>
+                    <select id="bulk-edit-status" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]">
+                        <option value="keep" selected>Keep existing</option>
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-[var(--text)]">Location</label>
+                    <input type="text" id="bulk-edit-location" class="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)]" placeholder="Leave empty to keep existing">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="flex-1 rounded-lg bg-[var(--brand)] py-2.5 text-sm font-medium text-white hover:opacity-95 transition">Apply Changes</button>
+                    <button type="button" onclick="hideBulkEditModal()" class="flex-1 rounded-lg border border-[var(--border)] bg-white py-2.5 text-sm font-medium text-[var(--muted)] hover:bg-[var(--surface-soft)] transition">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
 </body>
 </html>
