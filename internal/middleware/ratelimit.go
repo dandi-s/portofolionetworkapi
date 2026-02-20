@@ -9,70 +9,52 @@ import (
 )
 
 type visitor struct {
-	lastSeen time.Time
 	count    int
+	lastSeen time.Time
 }
 
 var (
 	visitors = make(map[string]*visitor)
-	mu       sync.RWMutex
+	mu       sync.Mutex
 )
 
-// RateLimit limits requests per IP
-// limit: max requests per minute
-func RateLimit(limit int) gin.HandlerFunc {
-	// Cleanup old visitors every 5 minutes
-	go cleanupVisitors()
+// RateLimit membatasi request per IP per menit
+func RateLimit(maxPerMinute int) gin.HandlerFunc {
+	// Cleanup visitor lama setiap menit
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			mu.Lock()
+			for ip, v := range visitors {
+				if time.Since(v.lastSeen) > time.Minute {
+					delete(visitors, ip)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
 
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 
 		mu.Lock()
-		defer mu.Unlock()
-
 		v, exists := visitors[ip]
-		if !exists {
-			visitors[ip] = &visitor{
-				lastSeen: time.Now(),
-				count:    1,
-			}
-			c.Next()
-			return
-		}
-
-		// Reset count if minute passed
-		if time.Since(v.lastSeen) > time.Minute {
-			v.count = 1
-			v.lastSeen = time.Now()
+		if !exists || time.Since(v.lastSeen) > time.Minute {
+			visitors[ip] = &visitor{count: 1, lastSeen: time.Now()}
+			mu.Unlock()
 			c.Next()
 			return
 		}
 
 		v.count++
-
-		// Check limit
-		if v.count > limit {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error": "Rate limit exceeded. Please try again later.",
-				"retry_after": 60 - int(time.Since(v.lastSeen).Seconds()),
+		if v.count > maxPerMinute {
+			mu.Unlock()
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "rate limit exceeded",
 			})
-			c.Abort()
 			return
 		}
-
-		c.Next()
-	}
-}
-
-func cleanupVisitors() {
-	ticker := time.NewTicker(5 * time.Minute)
-	for range ticker.C {
-		mu.Lock()
-		for ip, v := range visitors {
-			if time.Since(v.lastSeen) > 10*time.Minute {
-				delete(visitors, ip)
-			}
-		}
 		mu.Unlock()
+		c.Next()
 	}
 }

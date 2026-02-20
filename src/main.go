@@ -83,5 +83,8 @@ func main() {
 
 	log.Printf("🚀 Server starting on port %s", port)
 	log.Printf("🛡️ Rate limit: 100 requests/min per IP")
+
+	setupAlertIntegration(router)
+	
 	router.Run(":" + port)
 }
