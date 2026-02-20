@@ -45,9 +45,10 @@ Consume Zabbix alerts and enrich with business context:
 
 ### 3. Workflow Automation
 End-to-end incident management:
-- Auto-create tickets (HubSpot)
+- Auto-create tickets (Odoo CRM, HubSpot, etc.)
 - Location-based engineer assignment
 - Multi-channel notifications
+- **Telegram Bot integration** for real-time NOC alerts
 - Audit trail
 
 ## 🏗️ Architecture
@@ -230,6 +231,9 @@ Building this project demonstrates:
 - Device management
 - Basic monitoring integration
 - Command execution
+- Webhook alert orchestration
+- Telegram notifications
+- Odoo CRM ticketing system
 
 **Phase 2: Advanced Features** (Q2 2026)
 - Configuration templates library
